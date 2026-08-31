@@ -1,11 +1,66 @@
-# agentic-platform
+# agentic-platform (customer-support-agent)
 
 Domain-agnostic, production-grade **FastAPI** skeleton for a scalable agentic AI platform.
-Skeleton only: correct imports, full type hints, docstrings, and `# TODO:` markers where
-real logic goes. It imports and runs, and the test suite is green.
+This is the base/skeleton for the `customer-supprot-agent` repo — it ships **no** business
+logic. Everything is stubbed with correct imports, full type hints, docstrings, and
+`# TODO:` markers where real logic goes. It imports and runs as-is.
 
 The only example content is a generic **`echo` agent** + **`sample_tool`**, present purely to
-demonstrate the pattern. No business use case is hardcoded.
+demonstrate the pattern. Nothing domain-specific is hardcoded — build your use case on top.
+
+## Requirements
+
+- Python **3.12+**
+- PostgreSQL + Redis (only needed at runtime for DB-backed / memory features; the test
+  suite uses in-memory SQLite and a fake Redis)
+- An Anthropic API key for real LLM calls (`LLM__ANTHROPIC_API_KEY`)
+
+Dependencies are declared in `pyproject.toml` and mirrored to `requirements.txt` /
+`requirements-dev.txt` for plain-pip workflows.
+
+## Quickstart (pip)
+
+```bash
+py -m venv .venv
+.venv\Scripts\activate            # Windows;  source .venv/bin/activate on macOS/Linux
+pip install -r requirements-dev.txt
+
+copy .env.example .env            # Windows;  cp .env.example .env  elsewhere
+# edit .env and set LLM__ANTHROPIC_API_KEY if you want real LLM calls
+
+uvicorn app.main:app --reload     # http://127.0.0.1:8000
+pytest                            # run the test suite
+ruff check app tests             # lint
+mypy app                         # type-check
+```
+
+## Quickstart (uv)
+
+```bash
+uv sync
+cp .env.example .env
+make run        # uvicorn app.main:app --reload
+make test       # pytest
+make lint       # ruff check
+make typecheck  # mypy
+```
+
+## Docker
+
+```bash
+make docker-up                    # api + postgres + redis
+# or: docker compose -f docker/docker-compose.yml up --build
+```
+
+## Migrations
+
+Alembic is wired for async and reads the DB URL from app settings. No revisions ship with
+the skeleton — create the first one once you have models you want to persist:
+
+```bash
+make revision m="init"            # uv run alembic revision --autogenerate -m "init"
+make upgrade                      # uv run alembic upgrade head
+```
 
 ## Architecture
 
@@ -24,34 +79,50 @@ routes  ->  services  ->  repositories / agents  ->  db / llm / integrations
 | Services | `app/services` | Use cases; orchestrate repositories + the agent runtime. |
 | Repositories | `app/repositories` | All SQL. Generic `BaseRepository[T]` CRUD. |
 | Agents | `app/agents` | `BaseAgent`, registry, runtime, tools, memory. |
-| LLM | `app/llm` | Provider-agnostic `LLMProvider` protocol + tier router. |
+| LLM | `app/llm` | Provider-agnostic `LLMProvider` protocol + tier router + Anthropic client. |
 | Integrations | `app/integrations` | Outbound third-party clients. |
 | Core | `app/core` | Config, logging, security, errors, lifespan. |
+| Workers | `app/workers` | Off-request agent execution (queue TODO). |
 
-## Quickstart
+## Project layout
 
-```bash
-uv sync                       # install (uses pyproject.toml)
-cp .env.example .env          # set LLM__ANTHROPIC_API_KEY for real LLM calls
-make run                      # uvicorn app.main:app --reload
-make test                     # pytest
-make lint typecheck           # ruff + mypy
+```
+app/
+  main.py                     FastAPI app factory (create_app / app)
+  core/       config.py logging.py security.py exceptions.py lifespan.py
+  api/        deps.py  v1/router.py  v1/routes/{health,chat,sessions}.py
+  schemas/    common.py chat.py session.py agent_events.py
+  models/     base.py session.py message.py            (SQLAlchemy 2.0 async)
+  repositories/  base.py session.py message.py         (BaseRepository[T])
+  services/   session_service.py chat_service.py
+  agents/     base.py registry.py runtime.py echo_agent.py
+              prompts/echo.py
+              tools/{base,registry,sample_tool}.py     (@register_tool)
+              memory/{base,redis_memory}.py            (SessionMemory)
+  llm/        base.py router.py anthropic_client.py
+  integrations/  base.py example_integration.py
+  db/         base.py session.py
+  workers/    worker.py tasks.py
+  utils/      ids.py sse.py time.py
+tests/        conftest.py + mirrors of app/ (async client, transactional DB)
+alembic/      env.py (async) script.py.mako versions/
+docker/       Dockerfile (multi-stage) docker-compose.yml
 ```
 
-Docker:
+## Configuration
 
-```bash
-make docker-up                # api + postgres + redis
-```
+`pydantic-settings` with nested groups; env vars use a `__` delimiter (see `.env.example`):
 
-Migrations (after you create the first revision):
+| Group | Example var | Notes |
+|-------|-------------|-------|
+| `app` | `APP__ENV`, `APP__AUTH_DISABLED` | auth is disabled by default in the skeleton |
+| `db` | `DB__URL` | `postgresql+asyncpg://...` |
+| `redis` | `REDIS__URL`, `REDIS__SESSION_TTL_S` | short-term agent memory |
+| `llm` | `LLM__ANTHROPIC_API_KEY`, `LLM__{FAST,BALANCED,DEEP}_MODEL` | tier -> model map |
 
-```bash
-make revision m="init"
-make upgrade
-```
+## Endpoints
 
-## Key endpoints
+Base URL when running locally: `http://127.0.0.1:8000`. Interactive docs at `/docs`.
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -59,11 +130,12 @@ make upgrade
 | GET | `/api/v1/health/ready` | DB + Redis readiness |
 | POST | `/api/v1/sessions` | Create a session |
 | GET | `/api/v1/sessions/{id}` | Read a session |
-| GET | `/api/v1/sessions/{id}/messages` | List messages |
+| GET | `/api/v1/sessions/{id}/messages` | List messages (paginated) |
 | DELETE | `/api/v1/sessions/{id}` | Delete a session |
 | POST | `/api/v1/chat/{session_id}/stream` | SSE stream of `AgentEvent`s |
 
 `AgentEvent` is a discriminated union: `token`, `tool_call`, `tool_result`, `error`, `done`.
+Every error response uses one envelope: `{"error": {"code", "message", "details", "request_id"}}`.
 
 ---
 
