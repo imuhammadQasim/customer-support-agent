@@ -1,4 +1,4 @@
-# agentic-platform (customer-support-agent)
+# Agentic Platform (customer-support-agent)
 
 Domain-agnostic, production-grade **FastAPI** skeleton for a scalable agentic AI platform.
 This is the base/skeleton for the `customer-supprot-agent` repo — it ships **no** business
