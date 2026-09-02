@@ -13,8 +13,3 @@ def new_uuid() -> str:
 def new_request_id() -> str:
     """Return a compact (hex) request id."""
     return uuid.uuid4().hex
-
-
-def new_session_id() -> str:
-    """Return a new session identifier."""
-    return new_uuid()

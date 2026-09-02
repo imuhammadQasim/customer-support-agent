@@ -1,39 +1,13 @@
-.PHONY: install run worker test lint format typecheck migrate revision upgrade downgrade docker-up docker-down
+.PHONY: install run lint format
 
 install:
-	uv sync
+	pip install -r requirements-dev.txt
 
 run:
-	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-worker:
-	uv run python -m app.workers.worker
-
-test:
-	uv run pytest
+	uvicorn app.main:app --reload --port 8000
 
 lint:
-	uv run ruff check app tests
+	ruff check app
 
 format:
-	uv run ruff format app tests
-
-typecheck:
-	uv run mypy app
-
-migrate: upgrade
-
-revision:
-	uv run alembic revision --autogenerate -m "$(m)"
-
-upgrade:
-	uv run alembic upgrade head
-
-downgrade:
-	uv run alembic downgrade -1
-
-docker-up:
-	docker compose -f docker/docker-compose.yml up --build
-
-docker-down:
-	docker compose -f docker/docker-compose.yml down -v
+	ruff format app

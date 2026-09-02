@@ -1,1 +1,1 @@
-"""Core cross-cutting concerns: config, logging, security, errors, lifespan."""
+"""Core cross-cutting concerns: config, logging, errors."""

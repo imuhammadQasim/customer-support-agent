@@ -1,6 +1,6 @@
-"""Application/use-case layer. Orchestrates repositories + agents."""
+"""Application / use-case layer."""
 
 from app.services.chat_service import ChatService
-from app.services.session_service import SessionService
+from app.services.session_store import SessionStore, store
 
-__all__ = ["ChatService", "SessionService"]
+__all__ = ["ChatService", "SessionStore", "store"]

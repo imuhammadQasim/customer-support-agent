@@ -1,4 +1,9 @@
-"""Application error hierarchy + consistent JSON error-envelope handlers."""
+"""Application error types + a consistent JSON error envelope.
+
+Every error response has the same shape::
+
+    {"error": {"code": "...", "message": "...", "details": ..., "request_id": "..."}}
+"""
 
 from __future__ import annotations
 
@@ -15,12 +20,14 @@ logger = structlog.get_logger("app.errors")
 
 
 class AppError(Exception):
-    """Base class for all expected application errors."""
+    """Base class for expected application errors."""
 
     status_code: int = 500
     code: str = "internal_error"
 
-    def __init__(self, message: str = "Internal server error", *, details: Any | None = None) -> None:
+    def __init__(
+        self, message: str = "Internal server error", *, details: Any | None = None
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.details = details
@@ -32,46 +39,21 @@ class NotFoundError(AppError):
     status_code = 404
     code = "not_found"
 
-    def __init__(self, message: str = "Resource not found", *, details: Any | None = None) -> None:
-        super().__init__(message, details=details)
-
 
 class ValidationError(AppError):
-    """Domain-level validation failure (distinct from request-body validation)."""
+    """A domain-level validation failure."""
 
     status_code = 422
     code = "validation_error"
-
-    def __init__(self, message: str = "Validation failed", *, details: Any | None = None) -> None:
-        super().__init__(message, details=details)
-
-
-class ToolExecutionError(AppError):
-    """A tool invoked by an agent failed."""
-
-    status_code = 502
-    code = "tool_execution_error"
-
-    def __init__(self, message: str = "Tool execution failed", *, details: Any | None = None) -> None:
-        super().__init__(message, details=details)
-
-
-class LLMError(AppError):
-    """The LLM provider returned an error or was unreachable."""
-
-    status_code = 502
-    code = "llm_error"
-
-    def __init__(self, message: str = "LLM provider error", *, details: Any | None = None) -> None:
-        super().__init__(message, details=details)
 
 
 def _request_id(request: Request) -> str | None:
     return request.headers.get("X-Request-ID") or getattr(request.state, "request_id", None)
 
 
-def _envelope(*, code: str, message: str, details: Any | None, request_id: str | None) -> dict[str, Any]:
-    """Build the canonical error response body."""
+def _envelope(
+    *, code: str, message: str, details: Any | None, request_id: str | None
+) -> dict[str, Any]:
     return {
         "error": {
             "code": code,
@@ -84,7 +66,7 @@ def _envelope(*, code: str, message: str, details: Any | None, request_id: str |
 
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     """Handle known :class:`AppError` subclasses."""
-    logger.warning("app_error", code=exc.code, message=exc.message, status_code=exc.status_code)
+    logger.warning("app_error", code=exc.code, message=exc.message)
     return JSONResponse(
         status_code=exc.status_code,
         content=_envelope(
@@ -96,8 +78,10 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     )
 
 
-async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    """Handle FastAPI request-body/query validation errors."""
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Handle FastAPI request-body / query validation errors."""
     return JSONResponse(
         status_code=422,
         content=_envelope(

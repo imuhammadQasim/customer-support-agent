@@ -8,7 +8,6 @@ from fastapi import FastAPI
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.exceptions import add_exception_handlers
-from app.core.lifespan import lifespan
 from app.core.logging import configure_logging, request_context_middleware
 
 logger = structlog.get_logger("app.main")
@@ -22,12 +21,11 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app.name,
         version=settings.app.version,
-        lifespan=lifespan,
         docs_url="/docs",
         openapi_url="/openapi.json",
     )
 
-    # Middleware: request-id generation + timing (see app/core/logging.py).
+    # Request-id + timing (see app/core/logging.py).
     app.middleware("http")(request_context_middleware)
 
     # Consistent JSON error envelope for AppError + framework errors.

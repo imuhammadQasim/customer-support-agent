@@ -1,1 +1,1 @@
-"""HTTP API layer. Depends on services only; never on repositories/agents directly."""
+"""HTTP API layer. Routes call services; they hold no business logic themselves."""
